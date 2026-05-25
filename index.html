@@ -1,19 +1,887 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Flow simulator</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReactorLab – Non-Ideal Reactor Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-primary:    #ffffff;
+    --bg-secondary:  #f4f3ef;
+    --bg-tertiary:   #eceae4;
+    --text-primary:  #2c2c2a;
+    --text-secondary:#5f5e5a;
+    --text-tertiary: #88877f;
+    --border:        rgba(0,0,0,0.12);
+    --border-med:    rgba(0,0,0,0.22);
+    --accent-green:  #0f6e56;
+    --accent-amber:  #ba7517;
+    --accent-blue:   #185fa5;
+    --accent-red:    #993c1d;
+    --accent-green-l:#e1f5ee;
+    --accent-amber-l:#faeeda;
+    --accent-blue-l: #e6f1fb;
+    --radius:        8px;
+    --radius-lg:     12px;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary:    #1e1e1c;
+      --bg-secondary:  #282825;
+      --bg-tertiary:   #2f2f2b;
+      --text-primary:  #d8d6cc;
+      --text-secondary:#9c9a92;
+      --text-tertiary: #6a6860;
+      --border:        rgba(255,255,255,0.08);
+      --border-med:    rgba(255,255,255,0.18);
+      --accent-green:  #5dcaa5;
+      --accent-amber:  #ef9f27;
+      --accent-blue:   #85b7eb;
+      --accent-red:    #f0997b;
+      --accent-green-l:#04342c;
+      --accent-amber-l:#412402;
+      --accent-blue-l: #042c53;
+    }
+  }
+
+  html, body {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+
+  .app-wrapper {
+    width: 100%;
+    max-width: 1000px;
+  }
+
+  .app-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .app-title h1 {
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+  }
+  .app-title span {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    letter-spacing: 1px;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 270px 1fr;
+    border: 0.5px solid var(--border-med);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg-primary);
+    min-height: 620px;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: var(--bg-secondary);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border-right: 0.5px solid var(--border);
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    color: var(--text-tertiary);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+  }
+
+  .divider {
+    height: 0.5px;
+    background: var(--border);
+  }
+
+  /* reactor / kinetic type buttons */
+  .btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+  }
+  .type-btn {
+    padding: 6px 4px;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+    font-family: var(--mono);
+    border: 0.5px solid var(--border-med);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    text-align: center;
+  }
+  .type-btn:hover { background: var(--bg-primary); color: var(--text-primary); }
+  .type-btn.active {
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    border-color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  /* sliders */
+  .param-group { display: flex; flex-direction: column; gap: 10px; }
+  .param-row   { display: flex; flex-direction: column; gap: 4px; }
+  .param-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .param-name  { font-size: 11px; color: var(--text-secondary); }
+  .param-valwrap { display: flex; align-items: baseline; gap: 2px; }
+  .param-val   { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .param-unit  { font-size: 10px; color: var(--text-tertiary); }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border-med);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    border: 2px solid var(--bg-secondary);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--text-primary); border: 2px solid var(--bg-secondary);
+    cursor: pointer;
+  }
+  input[type="range"]:focus {
+    outline: none;
+  }
+  input[type="range"]:focus::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.15);
+  }
+
+  .rtd-note {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    padding: 8px 10px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius);
+    border-left: 2px solid var(--border-med);
+    line-height: 1.6;
+  }
+
+  /* ── MAIN PANEL ── */
+  .main { display: flex; flex-direction: column; background: var(--bg-primary); }
+
+  .reactor-tabs {
+    display: flex;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .rtab {
+    flex: 1;
+    padding: 10px 4px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-align: center;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--mono);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .rtab.active {
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--text-primary);
+    font-weight: 500;
+  }
+  .rtab:hover:not(.active) {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .chart-area {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 300px;
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .chart-title-text { font-size: 11px; letter-spacing: 0.5px; color: var(--text-secondary); }
+  .chart-sub-text   { font-size: 10px; color: var(--text-tertiary); }
+  .canvas-wrap {
+    flex: 1;
+    position: relative;
+    min-height: 240px;
+  }
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+
+  /* ── METRICS BAR ── */
+  .metrics-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 0.5px solid var(--border);
+    background: var(--bg-secondary);
+  }
+  .metric { display: flex; flex-direction: column; gap: 2px; }
+  .metric-label { font-size: 9px; letter-spacing: 1px; color: var(--text-tertiary); text-transform: uppercase; }
+  .metric-value { font-size: 15px; font-weight: 500; color: var(--text-primary); }
+  .metric-unit  { font-size: 9px; color: var(--text-tertiary); }
+
+  /* responsive */
+  @media (max-width: 700px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { border-right: none; border-bottom: 0.5px solid var(--border); }
+    .metrics-bar { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
 </head>
 <body>
+<div class="app-wrapper">
 
-<h2>Reynolds number demo</h2>
+  <div class="app-title">
+    <h1>ReactorLab</h1>
+    <span>NON-IDEAL REACTORS · CHE 4420</span>
+  </div>
 
-<label>Velocity:</label>
-<input type="range" id="vel" min="0" max="10" step="0.1">
+  <div class="app">
+    <!-- ── SIDEBAR ── -->
+    <div class="sidebar">
 
-<p id="result"></p>
+      <div>
+        <div class="section-label">Reactor Type</div>
+        <div class="btn-grid" id="rtypes">
+          <button class="type-btn active" data-r="CSTR">CSTR</button>
+          <button class="type-btn" data-r="PFR">PFR</button>
+          <button class="type-btn" data-r="PFR+CSTR">Series</button>
+          <button class="type-btn" data-r="DISP">Dispersion</button>
+        </div>
+      </div>
 
-<script src="app.js"></script>
+      <div class="divider"></div>
 
+      <div>
+        <div class="section-label">Reaction Kinetics</div>
+        <div class="btn-grid" id="ktypes">
+          <button class="type-btn active" data-k="1">1st order</button>
+          <button class="type-btn" data-k="2">2nd order</button>
+          <button class="type-btn" data-k="0">0th order</button>
+          <button class="type-btn" data-k="sat">Saturation</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">Operating Conditions</div>
+      <div class="param-group">
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-name">Feed concentration C₀</span>
+            <div class="param-valwrap">
+              <span class="param-val" id="v-c0">1.00</span>
+              <span class="param-unit">mol/L</span>
+            </div>
+          </div>
+          <input type="range" min="0.1" max="5" step="0.1" value="1.0" id="s-c0">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-name">Volumetric flow Q</span>
+            <div class="param-valwrap">
+              <span class="param-val" id="v-q">1.00</span>
+              <span class="param-unit">L/min</span>
+            </div>
+          </div>
+          <input type="range" min="0.1" max="5" step="0.1" value="1.0" id="s-q">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-name">Reactor volume V</span>
+            <div class="param-valwrap">
+              <span class="param-val" id="v-vol">2.00</span>
+              <span class="param-unit">L</span>
+            </div>
+          </div>
+          <input type="range" min="0.5" max="20" step="0.5" value="2.0" id="s-vol">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-name">Rate constant k</span>
+            <div class="param-valwrap">
+              <span class="param-val" id="v-k">0.50</span>
+              <span class="param-unit">1/min</span>
+            </div>
+          </div>
+          <input type="range" min="0.05" max="5" step="0.05" value="0.5" id="s-k">
+        </div>
+
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">Non-Ideal Parameters</div>
+      <div class="param-group">
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-name">Dead volume fraction</span>
+            <span class="param-val" id="v-dead">0.00</span>
+          </div>
+          <input type="range" min="0" max="0.6" step="0.01" value="0.0" id="s-dead">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-name">Bypass fraction</span>
+            <span class="param-val" id="v-bypass">0.00</span>
+          </div>
+          <input type="range" min="0" max="0.5" step="0.01" value="0.0" id="s-bypass">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-name">Dispersion Pe⁻¹</span>
+            <span class="param-val" id="v-disp">0.10</span>
+          </div>
+          <input type="range" min="0.001" max="2" step="0.01" value="0.1" id="s-disp">
+        </div>
+
+      </div>
+
+      <div class="rtd-note" id="rtd-note">
+        τ = V/Q is the mean residence time. Dead volume reduces effective τ; bypass creates a fast-lane channel.
+      </div>
+
+    </div><!-- /sidebar -->
+
+    <!-- ── MAIN ── -->
+    <div class="main">
+      <div class="reactor-tabs">
+        <button class="rtab active" data-tab="conc" onclick="switchTab('conc')">Concentration Profile</button>
+        <button class="rtab" data-tab="rtd"  onclick="switchTab('rtd')">RTD Curve E(t)</button>
+        <button class="rtab" data-tab="mb"   onclick="switchTab('mb')">Material Balance</button>
+      </div>
+
+      <div class="chart-area">
+        <div class="chart-header">
+          <span class="chart-title-text" id="chart-label">Axial concentration profile C(z/L)</span>
+          <span class="chart-sub-text"   id="chart-sub"></span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="main-canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="metrics-bar">
+        <div class="metric">
+          <div class="metric-label">Mean Res. Time τ</div>
+          <div class="metric-value" id="m-tau">2.000</div>
+          <div class="metric-unit">min</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Exit Conc. C_out</div>
+          <div class="metric-value" id="m-cout">0.3679</div>
+          <div class="metric-unit">mol/L</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Conversion X</div>
+          <div class="metric-value" id="m-X">63.2%</div>
+          <div class="metric-unit"></div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Damköhler Da</div>
+          <div class="metric-value" id="m-da">1.000</div>
+          <div class="metric-unit">kτ</div>
+        </div>
+      </div>
+    </div><!-- /main -->
+
+  </div><!-- /app -->
+</div><!-- /wrapper -->
+
+<script>
+'use strict';
+
+/* ── state ── */
+let rtype = 'CSTR', ktype = '1', activeTab = 'conc';
+const N = 80;
+
+/* ── helpers ── */
+const g  = id => document.getElementById(id);
+const fv = id => parseFloat(g(id).value);
+
+function getParams() {
+  const C0 = fv('s-c0'), Q = fv('s-q'), V = fv('s-vol');
+  const k  = fv('s-k'),  dead = fv('s-dead'), bypass = fv('s-bypass'), disp = fv('s-disp');
+  const Veff = V * (1 - dead);
+  const Qeff = Q * (1 - bypass);
+  const tau  = Veff / Qeff;
+  return { C0, Q, V, k, dead, bypass, disp, Veff, Qeff, tau };
+}
+
+/* ── reaction rate ── */
+function rxn(C, k) {
+  if (ktype === '1')  return k * C;
+  if (ktype === '2')  return k * C * C;
+  if (ktype === '0')  return C > 1e-9 ? k : 0;
+  if (ktype === 'sat') return k * C / (0.5 + C);
+  return k * C;
+}
+
+/* ── Michaelis-Menten CSTR solver (Newton) ── */
+function solveMMCSTR(C0, tau, km, Km) {
+  let C = C0 / 2;
+  for (let i = 0; i < 300; i++) {
+    const f  =  C + km * tau * C / (Km + C) - C0;
+    const df = 1 + km * tau * Km / ((Km + C) ** 2);
+    const dC = f / df;
+    C -= dC;
+    if (C < 0) C = 1e-9;
+    if (Math.abs(dC) < 1e-10) break;
+  }
+  return Math.max(0, C);
+}
+
+/* ── concentration profile ── */
+function computeConc(p) {
+  const { C0, k, tau, bypass } = p;
+
+  if (rtype === 'CSTR') {
+    let Cactive;
+    if      (ktype === '1')   Cactive = C0 / (1 + k * tau);
+    else if (ktype === '2') { const a = k*tau, b = 1, c = -C0; Cactive = (-b + Math.sqrt(b*b + 4*a*c)) / (2*a); }
+    else if (ktype === '0')   Cactive = Math.max(0, C0 - k * tau);
+    else                      Cactive = solveMMCSTR(C0, tau, k, 0.5);
+    const Cout    = bypass * C0 + (1 - bypass) * Cactive;
+    const profile = new Array(N + 1).fill(Cactive);
+    profile[0] = C0;
+    return { Cout, profile };
+  }
+
+  if (rtype === 'PFR') {
+    const dz = 1 / N;
+    let C = C0;
+    const profile = [C0];
+    for (let i = 0; i < N; i++) {
+      C = Math.max(0, C - rxn(C, k) * tau * dz);
+      profile.push(C);
+    }
+    return { Cout: bypass * C0 + (1 - bypass) * profile[N], profile };
+  }
+
+  if (rtype === 'PFR+CSTR') {
+    const tHalf = tau / 2, dz = 2 / N;
+    let C = C0;
+    const profile = [C0];
+    for (let i = 0; i < N / 2; i++) {
+      C = Math.max(0, C - rxn(C, k) * tHalf * dz);
+      profile.push(C);
+    }
+    let Cactive;
+    if      (ktype === '1')   Cactive = C / (1 + k * tHalf);
+    else if (ktype === '2') { const a = k*tHalf, b = 1, c = -C; Cactive = (-b + Math.sqrt(b*b + 4*a*c)) / (2*a); }
+    else if (ktype === '0')   Cactive = Math.max(0, C - k * tHalf);
+    else                      Cactive = solveMMCSTR(C, tHalf, k, 0.5);
+    for (let i = N/2; i <= N; i++) profile.push(Cactive);
+    return { Cout: bypass * C0 + (1 - bypass) * Cactive, profile };
+  }
+
+  if (rtype === 'DISP') {
+    const Pe = 1 / Math.max(p.disp, 0.001);
+    const dz = 1 / N;
+    let arr = new Float64Array(N + 2).fill(C0);
+    for (let iter = 0; iter < 800; iter++) {
+      const next = new Float64Array(N + 2);
+      for (let i = 1; i <= N; i++) {
+        const diff = (arr[i-1] - 2*arr[i] + arr[i+1]) / (dz * dz * Pe);
+        const conv = (arr[i] - arr[i-1]) / dz;
+        next[i] = Math.max(0, arr[i] + 0.0008 * (-conv + diff - rxn(arr[i], k) * tau));
+      }
+      next[0] = C0; next[N+1] = next[N];
+      arr = next;
+    }
+    const profile = Array.from(arr).slice(0, N + 1);
+    return { Cout: bypass * C0 + (1 - bypass) * profile[N], profile };
+  }
+}
+
+/* ── RTD ── */
+function computeRTD(p) {
+  const { tau, bypass, disp } = p;
+  const tmax = 5 * tau, steps = 250, dt = tmax / steps;
+  const t = [], E = [];
+  for (let i = 0; i <= steps; i++) {
+    const ti = i * dt;
+    t.push(ti);
+    let ei = 0;
+    if (rtype === 'CSTR' || rtype === 'PFR+CSTR') {
+      ei = (1 / tau) * Math.exp(-ti / tau);
+    } else if (rtype === 'PFR') {
+      const idx = Math.round(tau / dt);
+      ei = (i === idx) ? 1 / dt : 0;
+    } else { /* DISP */
+      const Pe = 1 / Math.max(disp, 0.001);
+      const theta = ti / (tau + 1e-12);
+      if (ti > 0.01 * tau) {
+        ei = Math.sqrt(Pe / (4 * Math.PI * theta)) * Math.exp(-Pe * (1 - theta) ** 2 / (4 * theta)) / tau;
+      }
+    }
+    E.push(ei * (1 - bypass));
+  }
+  return { t, E };
+}
+
+/* ── theme colours ── */
+function getTheme() {
+  const d = matchMedia('(prefers-color-scheme: dark)').matches;
+  return {
+    text:      d ? '#c2c0b6' : '#3d3d3a',
+    textFaint: d ? 'rgba(150,148,140,.65)' : 'rgba(115,114,108,.65)',
+    grid:      d ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)',
+    ax:        d ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.15)',
+    primary:   d ? '#5dcaa5' : '#0f6e56',
+    secondary: d ? '#ef9f27' : '#ba7517',
+    tertiary:  d ? '#85b7eb' : '#185fa5',
+    danger:    d ? '#f0997b' : '#993c1d',
+    bg:        d ? '#1e1e1c' : '#ffffff',
+    bgS:       d ? '#282825' : '#f4f3ef',
+  };
+}
+
+/* ── canvas resize helper ── */
+function resizeCanvas(canvas) {
+  const wrap = canvas.parentElement;
+  const dpr  = window.devicePixelRatio || 1;
+  const W    = wrap.clientWidth  || 500;
+  const H    = wrap.clientHeight || 260;
+  if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return { W, H };
+  }
+  return { W: canvas.width / dpr, H: canvas.height / dpr };
+}
+
+/* ── draw axes helper ── */
+function drawAxes(ctx, pad, cw, ch, W, H, xmax, ymax, xLabel, yLabel, T) {
+  ctx.strokeStyle = T.grid; ctx.lineWidth = 0.5;
+  const xTicks = 5, yTicks = 5;
+  for (let i = 0; i <= yTicks; i++) {
+    const y = pad.t + i * (ch / yTicks);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    const val = ymax * (1 - i / yTicks);
+    ctx.fillStyle = T.textFaint; ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'right'; ctx.fillText(val.toFixed(val < 0.01 ? 4 : 3), pad.l - 5, y + 4);
+  }
+  for (let i = 0; i <= xTicks; i++) {
+    const x = pad.l + i * (cw / xTicks);
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + ch); ctx.stroke();
+    ctx.fillStyle = T.textFaint; ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'center'; ctx.fillText((xmax * i / xTicks).toFixed(2), x, pad.t + ch + 14);
+  }
+  ctx.fillStyle = T.text; ctx.font = '10px JetBrains Mono, monospace';
+  ctx.save(); ctx.translate(13, pad.t + ch / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center'; ctx.fillText(yLabel, 0, 0); ctx.restore();
+  ctx.textAlign = 'center'; ctx.fillText(xLabel, pad.l + cw / 2, H - 4);
+  ctx.strokeStyle = T.ax; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + ch); ctx.lineTo(W - pad.r, pad.t + ch); ctx.stroke();
+}
+
+/* ── DRAW: concentration ── */
+function drawConc(canvas, p) {
+  const { W, H } = resizeCanvas(canvas);
+  const result   = computeConc(p);
+  const { profile, Cout } = result;
+  const { C0 } = p;
+  const ctx  = canvas.getContext('2d');
+  const T    = getTheme();
+  ctx.clearRect(0, 0, W, H);
+
+  const pad  = { l: 56, r: 16, t: 24, b: 38 };
+  const cw   = W - pad.l - pad.r;
+  const ch   = H - pad.t - pad.b;
+  const maxC = C0 * 1.08;
+
+  const cx = v => pad.l + v * cw;
+  const cy = v => pad.t + ch - (v / maxC) * ch;
+
+  drawAxes(ctx, pad, cw, ch, W, H, 1, maxC, 'z/L  (dimensionless position)', 'C  (mol/L)', T);
+
+  const alpha28 = hex => hex + '28';
+  const drawProfile = (prof, color) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    ctx.beginPath();
+    prof.forEach((c, i) => { const x = cx(i / (prof.length - 1)), y = cy(c); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+    ctx.fillStyle = alpha28(color);
+    ctx.beginPath(); ctx.moveTo(cx(0), cy(0));
+    prof.forEach((c, i) => ctx.lineTo(cx(i / (prof.length - 1)), cy(c)));
+    ctx.lineTo(cx(1), cy(0)); ctx.closePath(); ctx.fill();
+  };
+
+  if (rtype === 'CSTR') {
+    /* step function: C0 at inlet, drops to Cout */
+    const step = [C0, ...new Array(N).fill(Cout)];
+    drawProfile(step, T.primary);
+    /* dashed inlet marker */
+    ctx.strokeStyle = T.secondary; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(cx(1 / N), cy(0)); ctx.lineTo(cx(1 / N), cy(C0)); ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    drawProfile(profile, T.primary);
+    if (rtype === 'PFR+CSTR') {
+      ctx.strokeStyle = T.secondary + '99'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(cx(0.5), cy(0)); ctx.lineTo(cx(0.5), cy(C0)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = T.text; ctx.font = '9px JetBrains Mono, monospace';
+      ctx.textAlign = 'center'; ctx.fillText('PFR → CSTR', cx(0.5), pad.t + 14);
+    }
+  }
+
+  /* labels */
+  ctx.fillStyle = T.text; ctx.font = '11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText('C₀ = ' + C0.toFixed(2),   pad.l + 6, cy(C0) - 6);
+  ctx.fillText('C_out = ' + Cout.toFixed(4), cx(0.72), cy(Cout) - 8);
+}
+
+/* ── DRAW: RTD ── */
+function drawRTD(canvas, p) {
+  const { W, H } = resizeCanvas(canvas);
+  const { t, E } = computeRTD(p);
+  const ctx = canvas.getContext('2d');
+  const T   = getTheme();
+  ctx.clearRect(0, 0, W, H);
+
+  const pad  = { l: 60, r: 16, t: 24, b: 38 };
+  const cw   = W - pad.l - pad.r;
+  const ch   = H - pad.t - pad.b;
+  const tmax = Math.max(...t);
+  const emax = (Math.max(...E) || 0.01) * 1.15;
+
+  const cx = v => pad.l + (v / tmax) * cw;
+  const cy = v => pad.t + ch - (v / emax) * ch;
+
+  drawAxes(ctx, pad, cw, ch, W, H, tmax, emax, 'time t  (min)', 'E(t)  (1/min)', T);
+
+  /* fill + stroke */
+  ctx.fillStyle = T.tertiary + '28';
+  ctx.beginPath(); ctx.moveTo(cx(t[0]), cy(0));
+  t.forEach((ti, i) => ctx.lineTo(cx(ti), cy(E[i])));
+  ctx.lineTo(cx(t[t.length - 1]), cy(0)); ctx.closePath(); ctx.fill();
+
+  ctx.strokeStyle = T.tertiary; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+  ctx.beginPath();
+  t.forEach((ti, i) => { const x = cx(ti), y = cy(E[i]); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+  ctx.stroke();
+
+  /* mean τ dashed line */
+  const tau = p.tau;
+  if (tau < tmax) {
+    ctx.strokeStyle = T.secondary; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(cx(tau), cy(0)); ctx.lineTo(cx(tau), cy(emax * 0.88)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = T.secondary; ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'left'; ctx.fillText('τ = ' + tau.toFixed(2) + ' min', cx(tau) + 4, cy(emax * 0.88) + 4);
+  }
+}
+
+/* ── DRAW: material balance ── */
+function drawMB(canvas, p) {
+  const { W, H } = resizeCanvas(canvas);
+  const ctx = canvas.getContext('2d');
+  const T   = getTheme();
+  ctx.clearRect(0, 0, W, H);
+
+  const { Cout } = computeConc(p);
+  const { C0, Q } = p;
+  const mIn  = C0 * Q;
+  const mOut = Cout * Q;
+  const mRxn = mIn - mOut;
+  const mErr = Math.abs(mIn - mOut - mRxn); /* ≈ 0 by construction */
+
+  const items = [
+    { label: 'Molar flow in',    sub: 'F₀ = C₀ · Q',      val: mIn,  col: T.tertiary },
+    { label: 'Molar flow out',   sub: 'F = C_out · Q',     val: mOut, col: T.primary  },
+    { label: 'Consumption  r·V', sub: 'F₀ – F_out',        val: mRxn, col: T.danger   },
+    { label: 'Balance error',    sub: '|F₀ – F_out – r·V|',val: mErr, col: T.secondary},
+  ];
+
+  const maxVal = Math.max(mIn, mOut, mRxn) * 1.2 || 0.1;
+  const labelW = 170, pad = { l: labelW + 10, r: 120, t: 28, b: 32 };
+  const barZone = W - pad.l - pad.r;
+  const rowH = 44, rowGap = 18;
+  const startY = pad.t;
+
+  items.forEach((item, i) => {
+    const y  = startY + i * (rowH + rowGap);
+    const bw = Math.max(3, (item.val / maxVal) * barZone);
+
+    /* track */
+    ctx.fillStyle = item.col + '22';
+    ctx.beginPath(); ctx.roundRect(pad.l, y, barZone, rowH, 5); ctx.fill();
+    /* fill */
+    ctx.fillStyle = item.col + 'bb';
+    ctx.beginPath(); ctx.roundRect(pad.l, y, bw, rowH, 5); ctx.fill();
+
+    /* label */
+    ctx.fillStyle = T.text; ctx.font = '500 11px JetBrains Mono, monospace';
+    ctx.textAlign = 'right'; ctx.fillText(item.label, pad.l - 8, y + 16);
+    ctx.fillStyle = T.textFaint; ctx.font = '10px JetBrains Mono, monospace';
+    ctx.fillText(item.sub, pad.l - 8, y + 32);
+
+    /* value */
+    ctx.fillStyle = item.col; ctx.font = '500 11px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(item.val.toFixed(4) + ' mol/min', pad.l + bw + 8, y + 26);
+  });
+
+  const X = (mRxn / (mIn + 1e-12) * 100);
+  ctx.fillStyle = T.textFaint; ctx.font = '10px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('Conversion X = ' + X.toFixed(2) + '%   |   Damköhler Da = ' + (p.k * p.tau).toFixed(3),
+    W / 2, H - 8);
+}
+
+/* ── master update ── */
+function update() {
+  const p = getParams();
+
+  g('v-c0').textContent    = fv('s-c0').toFixed(2);
+  g('v-q').textContent     = fv('s-q').toFixed(2);
+  g('v-vol').textContent   = fv('s-vol').toFixed(2);
+  g('v-k').textContent     = fv('s-k').toFixed(2);
+  g('v-dead').textContent   = fv('s-dead').toFixed(2);
+  g('v-bypass').textContent = fv('s-bypass').toFixed(2);
+  g('v-disp').textContent   = fv('s-disp').toFixed(2);
+
+  const canvas = g('main-canvas');
+  if (activeTab === 'conc') drawConc(canvas, p);
+  else if (activeTab === 'rtd') drawRTD(canvas, p);
+  else drawMB(canvas, p);
+
+  const { Cout } = computeConc(p);
+  const X = ((p.C0 - Cout) / p.C0 * 100);
+  g('m-tau').textContent  = p.tau.toFixed(3);
+  g('m-cout').textContent = Cout.toFixed(4);
+  g('m-X').textContent    = X.toFixed(1) + '%';
+  g('m-da').textContent   = (p.k * p.tau).toFixed(3);
+
+  const labels = {
+    conc: 'Axial concentration profile C(z/L)',
+    rtd:  'Residence time distribution E(t)',
+    mb:   'Material balance – molar flow audit'
+  };
+  g('chart-label').textContent = labels[activeTab];
+
+  const subs = {
+    CSTR:      'Perfectly mixed – single equilibrium concentration',
+    PFR:       'Plug flow – no axial mixing',
+    'PFR+CSTR':'Series: PFR followed by CSTR (split at z/L = 0.5)',
+    DISP:      'Axial dispersion model – Danckwerts boundary conditions'
+  };
+  g('chart-sub').textContent = subs[rtype] || '';
+
+  const notes = {
+    CSTR:      'CSTR: perfectly mixed. C_out = C₀/(1 + Da) for 1st order. Dead volume raises effective τ in the active zone. Bypass reduces conversion.',
+    PFR:       'PFR: ideal plug flow, no axial mixing. Gives maximum conversion for n > 0 kinetics vs CSTR at same Da. Profile shows full spatial gradient.',
+    'PFR+CSTR':'Series: PFR pre-converts feed, CSTR finishes. Concentration drops smoothly in PFR half then jumps to mixed exit value. Adjust bypass/dead volume to see non-ideal effects.',
+    DISP:      'Dispersion model: Pe = uL/D. Low Pe⁻¹ (≈0) → plug flow (PFR). High Pe⁻¹ (→2) → perfect mixing (CSTR). Danckwerts BCs applied at both ends.'
+  };
+  g('rtd-note').textContent = notes[rtype] || '';
+}
+
+/* ── tab switch ── */
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.rtab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  const canvas = g('main-canvas');
+  /* reset canvas so resizeCanvas triggers a clean redraw */
+  canvas.width = 0; canvas.height = 0;
+  update();
+}
+
+/* ── button groups ── */
+document.getElementById('rtypes').addEventListener('click', e => {
+  const btn = e.target.closest('[data-r]'); if (!btn) return;
+  rtype = btn.dataset.r;
+  document.querySelectorAll('#rtypes .type-btn').forEach(b => b.classList.toggle('active', b === btn));
+  update();
+});
+document.getElementById('ktypes').addEventListener('click', e => {
+  const btn = e.target.closest('[data-k]'); if (!btn) return;
+  ktype = btn.dataset.k;
+  document.querySelectorAll('#ktypes .type-btn').forEach(b => b.classList.toggle('active', b === btn));
+  update();
+});
+
+/* ── slider live update ── */
+['s-c0','s-q','s-vol','s-k','s-dead','s-bypass','s-disp'].forEach(id => {
+  g(id).addEventListener('input', update);
+});
+
+/* ── responsive resize ── */
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const canvas = g('main-canvas');
+    canvas.width = 0; canvas.height = 0;
+    update();
+  }, 60);
+});
+
+/* ── initial draw ── */
+update();
+</script>
 </body>
 </html>
